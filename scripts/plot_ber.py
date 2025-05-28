@@ -3,10 +3,13 @@ import matplotlib.pyplot as plt
 import os
 from cycler import cycler
 
-csv_filename = "../build/simulation_results.csv"
-plot_title = "BER vs Noise"
-x_label = "Noise"
-y_label = "Bit Error Rate"
+
+csv_filename = "../build/simulation_results_snr.csv"
+output_plot_filename_optional = "../ber_vs_snr_plot.png"
+
+plot_title = "BER vs. SNR (Eb/N0)"
+x_label = "SNR (Eb/N0) [dB]"
+y_label = "Bit Error Rate (BER)"
 plot_style = 'dark_background'
 
 bright_colors = [
@@ -19,9 +22,10 @@ bright_colors = [
 ]
 # ---------------------------------------------------
 
-def plot_ber_curves(data_file):
+def plot_ber_curves(data_file, save_to_file=False, output_filename="ber_plot.png"):
+
     if not os.path.exists(data_file):
-        alt_data_file = "../simulation_results.csv"
+        alt_data_file = "../simulation_results_snr.csv"
         if os.path.exists(alt_data_file):
             print(f"Info: Data file found at {alt_data_file} instead of {data_file}.")
             data_file = alt_data_file
@@ -36,7 +40,7 @@ def plot_ber_curves(data_file):
         print(f"Error reading or processing CSV file: {e}")
         return
 
-    required_columns = ['Modulation', 'NoiseVariance', 'BER']
+    required_columns = ['Modulation', 'SNR_dB', 'BER']
     if not all(col in df.columns for col in required_columns):
         print(f"Error: CSV file must contain columns: {required_columns}")
         print(f"Found columns: {df.columns.tolist()}")
@@ -56,15 +60,15 @@ def plot_ber_curves(data_file):
     modulations = df['Modulation'].unique()
     num_modulations = len(modulations)
     ax.set_prop_cycle(cycler(color=bright_colors[:num_modulations]))
-    # ------------------------------------------------------------
 
     mod_order = {'QPSK': 0, 'QAM16': 1, 'QAM64': 2}
     modulations = sorted(modulations, key=lambda x: mod_order.get(x, 99))
 
     for mod_type in modulations:
         mod_data = df[df['Modulation'] == mod_type].copy()
-        mod_data = mod_data.sort_values(by='NoiseVariance')
-        x_values = mod_data['NoiseVariance'].values
+        mod_data = mod_data.sort_values(by='SNR_dB')
+
+        x_values = mod_data['SNR_dB'].values
         y_values = mod_data['BER'].values
 
         ax.plot(x_values, y_values,
@@ -79,20 +83,30 @@ def plot_ber_curves(data_file):
     ax.set_title(plot_title)
     ax.set_yscale('log')
 
-    min_ber_actual = df[df['BER'] > min_ber_display / 10]['BER'].min()
-    if pd.notna(min_ber_actual) and min_ber_actual > 0:
-         ax.set_ylim(bottom=min_ber_actual * 0.1, top=1.1)
+    # ax.set_xscale('log')
+
+    min_ber_in_data = df[df['BER'] > 0]['BER'].min()
+    if pd.notna(min_ber_in_data) and min_ber_in_data > 0:
+        ax.set_ylim(bottom=max(min_ber_in_data * 0.1, 1e-7), top=1.1)
     else:
-        ax.set_ylim(bottom=min_ber_display/10, top=1.1)
+        ax.set_ylim(bottom=min_ber_display * 0.1, top=1.1)
+
 
     ax.grid(True, which='both', linestyle=':', linewidth=0.5, alpha=0.6)
-    ax.legend()
+    ax.legend(loc='lower left')
     fig.tight_layout()
 
-    print("Displaying plot...")
-    plt.show()
+    if save_to_file:
+        try:
+            plt.savefig(output_filename, dpi=300)
+            print(f"Plot saved successfully to {output_filename}")
+        except Exception as e:
+            print(f"Error saving plot: {e}")
+    else:
+        print("Displaying plot...")
+        plt.show()
 
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
-    plot_ber_curves(csv_filename)
+    plot_ber_curves(csv_filename, save_to_file=False, output_filename=output_plot_filename_optional)
